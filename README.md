@@ -12,7 +12,7 @@ A production-grade Retrieval-Augmented Generation platform. Upload documents, as
 **Backend**
 - FastAPI + Uvicorn
 - PostgreSQL + SQLAlchemy + Alembic migrations
-- FAISS vector store (persisted to disk)
+- PostgreSQL pgvector with BM25 keyword search and Reciprocal Rank Fusion (RRF)
 - OpenAI `gpt-4o-mini` + `text-embedding-3-small`
 - JWT authentication (python-jose + passlib/bcrypt)
 - Multi-tenant: Organizations → Members → Workspaces → Documents
@@ -28,10 +28,10 @@ A production-grade Retrieval-Augmented Generation platform. Upload documents, as
 ## Features
 
 - **JWT authentication** — register, login, token-based session
-- **Multi-workspace** — each workspace has isolated document storage and vector index
+- **Multi-workspace** — document access and retrieval are scoped to each workspace
 - **Tenant-scoped access** — all routes enforce org membership; document and chat endpoints require a valid token
-- **Document ingestion** — PDF, DOCX, TXT up to 10MB; chunked, embedded, and indexed on upload. Processing time scales with document size and current system load.
-- **Semantic search** — FAISS similarity search over per-workspace vector indexes
+- **Document ingestion** — PDF, DOCX, TXT up to 10MB; uploads return HTTP 202, then FastAPI background tasks chunk, embed, and index documents, with status polling. Processing time scales with document size and current system load. These tasks run in-process, not in a durable distributed queue.
+- **Hybrid search** — workspace-scoped pgvector similarity and BM25 keyword search, combined with Reciprocal Rank Fusion (RRF)
 - **RAG chat** — retrieved chunks injected as context into `gpt-4o-mini`; sources returned with every answer
 - **Admin dashboard** — request logs, latency tracking, document inventory, retrieval history, system health
 - **Observability** — request middleware traces every API call with timing, status, and workspace context
@@ -118,7 +118,7 @@ FastAPI Backend
         ↓
 PostgreSQL (users, orgs, workspaces, documents, chunks, audit logs)
         ↓
-FAISS (per-workspace .index + .mapping.json, persisted to disk)
+pgvector embeddings + BM25 keyword search, fused with RRF (workspace-scoped)
 ```
 
 ---
@@ -188,11 +188,11 @@ RAG-MVP/
 
 - [x] JWT authentication and tenant isolation
 - [x] Multi-workspace with org membership enforcement
-- [x] FAISS vector storage (disk-persisted)
+- [x] PostgreSQL pgvector storage and BM25/RRF hybrid retrieval
 - [x] RAG chat with source attribution
 - [x] Admin dashboard with observability
 - [x] 103-test backend suite
-- [ ] Async document ingestion (background task + status polling)
+- [x] Async document ingestion (in-process background task + status polling)
 - [ ] Redis caching layer
 - [ ] Rate limiting per workspace
 - [ ] Cost tracking per workspace / user
